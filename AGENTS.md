@@ -3,3 +3,33 @@
 
 This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` before writing any code. Heed deprecation notices.
 <!-- END:nextjs-agent-rules -->
+
+# HelpUs · 需求雷达
+
+从 HN / Reddit / V2EX / GitHub 定时挖掘"真实需求"帖子，LLM 归一化成需求卡片，Web 看板展示。
+
+## 架构（管道四段）
+
+1. **抓取** `src/lib/sources/{hn,reddit,v2ex,github}.ts` — 每个源导出 `fetchCandidates(): Promise<Candidate[]>`，只用公开 API，失败降级为空数组。
+2. **过滤** `src/lib/filter.ts` — 中英文正则捞"痛点表达"，进 LLM 前干掉大部分噪音。
+3. **提炼** `src/lib/classify.ts` — Vercel AI Gateway + `anthropic/claude-haiku-4.5`（`DEMAND_MODEL` 可覆盖），批量把候选变成 `DemandCard`；无凭据时降级为 pass-through（category=unclassified）。
+4. **存储** `src/lib/store.ts` — 有 `DATABASE_URL` 走 Neon Postgres（自动建表），否则写本地 `.data/demands.json`（已 gitignore）。
+
+入口：`/api/cron/ingest`（Vercel Cron 每 6 小时，见 vercel.json；设了 `CRON_SECRET` 就校验 Bearer）。看板：`/`（server component，URL 参数筛选 source/lang/days）。
+
+## 本地跑
+
+```sh
+npm run dev   # 然后 curl http://localhost:3000/api/cron/ingest 触发一次抓取
+```
+
+## 坑
+
+- **本地访问 HN/Reddit 等要走代理**：Node fetch 不认代理环境变量，必须加 `NODE_USE_ENV_PROXY=1 HTTP_PROXY=http://127.0.0.1:12334 HTTPS_PROXY=http://127.0.0.1:12334`。Vercel 上不需要。
+- **Reddit 公开 .json 端点对代理/机房 IP 返回 403**，目前 Reddit 源基本抓不到数据；要真用得上需要注册 Reddit OAuth app（client id/secret）改走官方 API。
+- **ai 包是 v7**：`generateObject` 已移除，结构化输出用 `generateText` + `Output.array({ element })`，结果读 `result.output`。AI SDK 用法别凭记忆写，查 `node_modules/ai/docs/`。
+- LLM 分类在本地默认跳过（没有 `AI_GATEWAY_API_KEY`），部署到 Vercel 后走 OIDC 自动生效。
+
+## 部署
+
+Vercel（账号 yuanyanva-7250）。Cron 只在 production 部署生效。环境变量见 `.env.example`；`DATABASE_URL` 用 Neon（Vercel Marketplace）。

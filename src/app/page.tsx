@@ -1,64 +1,251 @@
-import Image from "next/image";
+import { getDemands } from "@/lib/store";
+import type { DemandCard } from "@/lib/types";
 
-export default function Home() {
+export const dynamic = "force-dynamic";
+
+function buildQueryString(
+  source?: string,
+  lang?: string,
+  days?: string
+): string {
+  const params = new URLSearchParams();
+  if (source) params.set("source", source);
+  if (lang) params.set("lang", lang);
+  if (days) params.set("days", days);
+  const query = params.toString();
+  return query ? "?" + query : "/";
+}
+
+function FilterPill({
+  label,
+  isActive,
+  href,
+}: {
+  label: string;
+  isActive: boolean;
+  href: string;
+}) {
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+    <a
+      href={href}
+      className={`inline-block px-3 py-1 rounded-full text-sm font-medium transition-colors ${
+        isActive
+          ? "bg-zinc-900 dark:bg-zinc-100 text-white dark:text-black"
+          : "border border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 hover:border-zinc-400 dark:hover:border-zinc-600"
+      }`}
+    >
+      {label}
+    </a>
+  );
+}
+
+export default async function Home({
+  searchParams,
+}: {
+  searchParams: Promise<{ source?: string; lang?: string; days?: string }>;
+}) {
+  const params = await searchParams;
+  const source = params.source;
+  const lang = params.lang;
+  const daysStr = params.days;
+  const days = daysStr ? Number(daysStr) : undefined;
+
+  const demands = await getDemands({ source, lang, days, limit: 200 });
+
+  // Count by source
+  const countBySource = demands.reduce(
+    (acc, d) => {
+      acc[d.source] = (acc[d.source] || 0) + 1;
+      return acc;
+    },
+    {} as Record<string, number>
+  );
+
+  return (
+    <div className="min-h-screen bg-white dark:bg-black text-black dark:text-white">
+      {/* Header */}
+      <header className="border-b border-zinc-200 dark:border-zinc-800 py-8">
+        <div className="max-w-3xl mx-auto px-4">
+          <h1 className="text-3xl font-semibold mb-2">HelpUs · 需求雷达</h1>
+          <p className="text-zinc-600 dark:text-zinc-400">
+            从 HN / Reddit / V2EX / GitHub 挖掘的真实需求
           </p>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
+      </header>
+
+      {/* Filter Bar */}
+      <div className="border-b border-zinc-200 dark:border-zinc-800 py-6">
+        <div className="max-w-3xl mx-auto px-4 space-y-4">
+          {/* Source */}
+          <div className="flex flex-wrap gap-2 items-center">
+            <span className="text-sm font-medium text-zinc-600 dark:text-zinc-400">
+              来源:
+            </span>
+            <FilterPill
+              label="全部"
+              isActive={!source}
+              href={buildQueryString(undefined, lang, daysStr)}
             />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+            {["hn", "reddit", "v2ex", "github"].map((s) => (
+              <FilterPill
+                key={s}
+                label={s.toUpperCase()}
+                isActive={source === s}
+                href={buildQueryString(s, lang, daysStr)}
+              />
+            ))}
+          </div>
+
+          {/* Language */}
+          <div className="flex flex-wrap gap-2 items-center">
+            <span className="text-sm font-medium text-zinc-600 dark:text-zinc-400">
+              语言:
+            </span>
+            <FilterPill
+              label="全部"
+              isActive={!lang}
+              href={buildQueryString(source, undefined, daysStr)}
+            />
+            <FilterPill
+              label="中文"
+              isActive={lang === "zh"}
+              href={buildQueryString(source, "zh", daysStr)}
+            />
+            <FilterPill
+              label="English"
+              isActive={lang === "en"}
+              href={buildQueryString(source, "en", daysStr)}
+            />
+          </div>
+
+          {/* Time */}
+          <div className="flex flex-wrap gap-2 items-center">
+            <span className="text-sm font-medium text-zinc-600 dark:text-zinc-400">
+              时间:
+            </span>
+            <FilterPill
+              label="全部"
+              isActive={!days}
+              href={buildQueryString(source, lang, undefined)}
+            />
+            <FilterPill
+              label="24h"
+              isActive={days === 1}
+              href={buildQueryString(source, lang, "1")}
+            />
+            <FilterPill
+              label="7天"
+              isActive={days === 7}
+              href={buildQueryString(source, lang, "7")}
+            />
+          </div>
         </div>
+      </div>
+
+      {/* Summary */}
+      <div className="border-b border-zinc-200 dark:border-zinc-800 py-4">
+        <div className="max-w-3xl mx-auto px-4 text-sm text-zinc-600 dark:text-zinc-400">
+          共{" "}
+          <span className="font-semibold text-black dark:text-white">
+            {demands.length}
+          </span>{" "}
+          条{" "}
+          {Object.entries(countBySource).map(([src, count], idx) => (
+            <span key={src}>
+              {idx > 0 && " · "}
+              {src.toUpperCase()}: {count}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      {/* Card List */}
+      <main className="py-8">
+        {demands.length === 0 ? (
+          <div className="max-w-3xl mx-auto px-4">
+            <div className="rounded-lg border border-zinc-200 dark:border-zinc-800 p-8 text-center">
+              <p className="text-zinc-600 dark:text-zinc-400 mb-2">暂无数据</p>
+              <p className="text-sm text-zinc-500 dark:text-zinc-500">
+                运行{" "}
+                <code className="bg-zinc-100 dark:bg-zinc-900 px-2 py-1 rounded text-xs">
+                  curl http://localhost:3000/api/cron/ingest
+                </code>{" "}
+                开始挖掘需求
+              </p>
+            </div>
+          </div>
+        ) : (
+          <div className="max-w-3xl mx-auto px-4 space-y-4">
+            {demands.map((card) => (
+              <article
+                key={card.id}
+                className="rounded-lg border border-zinc-200 dark:border-zinc-800 p-6 hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors"
+              >
+                {/* Headline */}
+                <h2 className="text-lg font-medium mb-3 text-black dark:text-white">
+                  {card.demand}
+                </h2>
+
+                {/* Chips Row */}
+                <div className="flex flex-wrap gap-2 mb-3">
+                  {/* Source Badge */}
+                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-zinc-100 dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300">
+                    {card.source.toUpperCase()}
+                  </span>
+
+                  {/* Category */}
+                  {card.category && (
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-zinc-100 dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300">
+                      {card.category}
+                    </span>
+                  )}
+
+                  {/* Language */}
+                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-zinc-100 dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300">
+                    {card.lang === "zh" ? "中文" : "EN"}
+                  </span>
+
+                  {/* Pay Signal */}
+                  {card.paySignal === "strong" && (
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300">
+                      💰 愿付费
+                    </span>
+                  )}
+                  {card.paySignal === "weak" && (
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-zinc-100 dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400">
+                      可能付费
+                    </span>
+                  )}
+
+                  {/* Confidence */}
+                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-zinc-100 dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300">
+                    {Math.round(card.confidence * 100)}%
+                  </span>
+                </div>
+
+                {/* Audience & Scenario */}
+                <p className="text-sm text-zinc-600 dark:text-zinc-400 mb-4">
+                  {[card.audience, card.scenario].filter(Boolean).join(" · ")}
+                </p>
+
+                {/* Footer */}
+                <div className="flex flex-wrap items-center gap-4 text-xs text-zinc-500 dark:text-zinc-500 pt-4 border-t border-zinc-100 dark:border-zinc-900">
+                  <span>▲{card.score}</span>
+                  <span>💬{card.numComments}</span>
+                  <span>{new Date(card.postedAt).toISOString().split("T")[0]}</span>
+                  <a
+                    href={card.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-blue-600 dark:text-blue-400 hover:underline ml-auto"
+                  >
+                    原帖 ↗
+                  </a>
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
       </main>
     </div>
   );
