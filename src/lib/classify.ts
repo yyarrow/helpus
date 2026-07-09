@@ -1,14 +1,21 @@
 import { generateText, Output } from "ai";
+import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { z } from "zod";
 import type { Candidate, DemandCard } from "@/lib/types";
 
 // LLM stage: turn filtered candidates into normalized demand cards.
-// Uses a cheap model through the Vercel AI Gateway. If no gateway credentials
-// are available (bare local dev), falls back to pass-through cards so the
-// pipeline still runs end-to-end.
+// Uses a cheap model through OpenRouter (OPENROUTER_API_KEY). If the key is
+// missing, falls back to pass-through cards so the pipeline still runs
+// end-to-end.
 
-const MODEL = process.env.DEMAND_MODEL ?? "anthropic/claude-haiku-4.5";
+const MODEL = process.env.DEMAND_MODEL ?? "google/gemini-3.5-flash";
 const BATCH_SIZE = 12;
+
+const openrouter = createOpenAICompatible({
+  name: "openrouter",
+  baseURL: "https://openrouter.ai/api/v1",
+  apiKey: process.env.OPENROUTER_API_KEY ?? "",
+});
 
 const itemSchema = z.object({
   id: z.string(),
@@ -27,8 +34,8 @@ const itemSchema = z.object({
   confidence: z.number().min(0).max(1),
 });
 
-function hasGatewayCredentials(): boolean {
-  return !!(process.env.AI_GATEWAY_API_KEY || process.env.VERCEL_OIDC_TOKEN || process.env.VERCEL);
+function hasCredentials(): boolean {
+  return !!process.env.OPENROUTER_API_KEY;
 }
 
 function passthroughCard(c: Candidate, now: string): DemandCard {
@@ -63,7 +70,7 @@ async function classifyBatch(batch: Candidate[], now: string): Promise<DemandCar
   }));
 
   const { output } = await generateText({
-    model: MODEL,
+    model: openrouter(MODEL),
     output: Output.array({ element: itemSchema }),
     prompt: [
       "You are mining community posts for real product demands (unmet needs someone might build a product for).",
@@ -105,8 +112,8 @@ export async function classifyCandidates(candidates: Candidate[]): Promise<Deman
   const now = new Date().toISOString();
   if (candidates.length === 0) return [];
 
-  if (!hasGatewayCredentials()) {
-    console.warn("classify: no AI gateway credentials, using pass-through cards");
+  if (!hasCredentials()) {
+    console.warn("classify: OPENROUTER_API_KEY not set, using pass-through cards");
     return candidates.map((c) => passthroughCard(c, now));
   }
 
