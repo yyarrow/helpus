@@ -45,12 +45,29 @@ const itemSchema = z.object({
 type Item = z.infer<typeof itemSchema>;
 
 // Accept a bare JSON array, a fenced ```json block, or an object wrapping the
-// array under a common key.
-function parseItems(text: string): Item[] {
+// array under a common key — with or without trailing prose after the JSON.
+function extractJson(text: string): unknown {
   const unfenced = text.replace(/```(?:json)?/g, "").trim();
   const start = unfenced.search(/[[{]/);
   if (start === -1) throw new Error("no JSON in model response");
-  const raw: unknown = JSON.parse(unfenced.slice(start));
+  const attempts = [
+    unfenced.slice(start),
+    unfenced.slice(start, unfenced.lastIndexOf("]") + 1),
+    unfenced.slice(start, unfenced.lastIndexOf("}") + 1),
+  ];
+  for (const attempt of attempts) {
+    if (!attempt) continue;
+    try {
+      return JSON.parse(attempt);
+    } catch {
+      // try the next, shorter slice
+    }
+  }
+  throw new Error("unparseable JSON in model response");
+}
+
+function parseItems(text: string): Item[] {
+  const raw = extractJson(text);
   const arr = Array.isArray(raw)
     ? raw
     : (Object.values(raw as Record<string, unknown>).find(Array.isArray) as unknown[]);
@@ -150,10 +167,17 @@ export async function classifyCandidates(candidates: Candidate[]): Promise<Deman
   const cards: DemandCard[] = [];
   for (let i = 0; i < candidates.length; i += BATCH_SIZE) {
     const batch = candidates.slice(i, i + BATCH_SIZE);
-    try {
-      cards.push(...(await classifyBatch(batch, now)));
-    } catch (err) {
-      console.warn(`classify: batch ${i / BATCH_SIZE} failed, passing through`, err);
+    let done = false;
+    for (let attempt = 0; attempt < 2 && !done; attempt++) {
+      try {
+        cards.push(...(await classifyBatch(batch, now)));
+        done = true;
+      } catch (err) {
+        console.warn(`classify: batch ${i / BATCH_SIZE} attempt ${attempt + 1} failed`, err);
+      }
+    }
+    if (!done) {
+      console.warn(`classify: batch ${i / BATCH_SIZE} exhausted retries, passing through`);
       cards.push(...batch.map((c) => passthroughCard(c, now)));
     }
   }
