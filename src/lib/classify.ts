@@ -1,4 +1,4 @@
-import { generateText, Output } from "ai";
+import { generateText } from "ai";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { z } from "zod";
 import type { Candidate, DemandCard } from "@/lib/types";
@@ -17,22 +17,49 @@ const openrouter = createOpenAICompatible({
   apiKey: process.env.OPENROUTER_API_KEY ?? "",
 });
 
+// Lenient by design: models (esp. via OpenRouter) drop or null fields freely,
+// so everything except id gets a fallback instead of failing the batch.
 const itemSchema = z.object({
   id: z.string(),
-  isDemand: z
-    .boolean()
-    .describe("true only if the post expresses a concrete unmet need for a tool/product/service"),
+  isDemand: z.boolean().catch(false),
   demand: z
     .string()
-    .describe("one-line statement of the need, in the same language as the post; empty if isDemand=false"),
-  audience: z.string().describe("who has this need, short phrase"),
-  scenario: z.string().describe("when/where the need arises, short phrase"),
-  category: z.string().describe("short category, e.g. 'dev tools' / '效率工具'"),
-  paySignal: z
-    .enum(["none", "weak", "strong"])
-    .describe("willingness-to-pay signal expressed in the text"),
-  confidence: z.number().min(0).max(1),
+    .nullish()
+    .transform((v) => v ?? ""),
+  audience: z
+    .string()
+    .nullish()
+    .transform((v) => v ?? ""),
+  scenario: z
+    .string()
+    .nullish()
+    .transform((v) => v ?? ""),
+  category: z
+    .string()
+    .nullish()
+    .transform((v) => v ?? ""),
+  paySignal: z.enum(["none", "weak", "strong"]).catch("none"),
+  confidence: z.number().min(0).max(1).catch(0.5),
 });
+
+type Item = z.infer<typeof itemSchema>;
+
+// Accept a bare JSON array, a fenced ```json block, or an object wrapping the
+// array under a common key.
+function parseItems(text: string): Item[] {
+  const unfenced = text.replace(/```(?:json)?/g, "").trim();
+  const start = unfenced.search(/[[{]/);
+  if (start === -1) throw new Error("no JSON in model response");
+  const raw: unknown = JSON.parse(unfenced.slice(start));
+  const arr = Array.isArray(raw)
+    ? raw
+    : (Object.values(raw as Record<string, unknown>).find(Array.isArray) as unknown[]);
+  if (!Array.isArray(arr)) throw new Error("no JSON array in model response");
+  return arr
+    .map((el) => itemSchema.safeParse(el))
+    .filter((r) => r.success)
+    .map((r) => r.data);
+}
 
 function hasCredentials(): boolean {
   return !!process.env.OPENROUTER_API_KEY;
@@ -69,21 +96,24 @@ async function classifyBatch(batch: Candidate[], now: string): Promise<DemandCar
     numComments: c.numComments,
   }));
 
-  const { output } = await generateText({
+  const { text } = await generateText({
     model: openrouter(MODEL),
-    output: Output.array({ element: itemSchema }),
     prompt: [
       "You are mining community posts for real product demands (unmet needs someone might build a product for).",
       "For EACH input post below, output exactly one result object with the same id.",
       "Mark isDemand=false for: memes, rants without a concrete need, self-promotion, job posts, news, questions already well-served by existing mainstream tools.",
       "Write `demand` as a crisp one-liner in the SAME language as the post (Chinese post -> Chinese demand).",
       "",
+      "Respond with ONLY a JSON array (no prose, no markdown fences). One object per post:",
+      '{"id": string, "isDemand": boolean, "demand": string, "audience": string, "scenario": string, "category": string, "paySignal": "none"|"weak"|"strong", "confidence": number 0-1}',
+      'Use empty strings for demand/audience/scenario/category when isDemand=false. `category` is a short label like "dev tools" / "效率工具".',
+      "",
       "Posts:",
       JSON.stringify(input, null, 2),
     ].join("\n"),
   });
 
-  const byId = new Map(output.map((o) => [o.id, o]));
+  const byId = new Map(parseItems(text).map((o) => [o.id, o]));
   return batch.map((c) => {
     const o = byId.get(c.id);
     if (!o) return { ...passthroughCard(c, now), confidence: 0.1 };
