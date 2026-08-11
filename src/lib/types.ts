@@ -16,6 +16,25 @@ export interface Candidate {
   lang: "zh" | "en";
 }
 
+// A group of demand cards expressing the same underlying need.
+// Cross-source recurrence is the strongest validation signal we have.
+export interface DemandCluster {
+  id: string; // cl_<random>
+  title: string; // short name of the underlying need
+  summary: string; // 1-2 sentences
+  category: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// Cluster plus read-time aggregates for ranking on the dashboard.
+export interface ClusterStats extends DemandCluster {
+  cardCount: number;
+  sourceCount: number; // distinct sources — the key validation signal
+  strongPayCount: number;
+  lastSeenAt: string; // newest member card's ingestedAt
+}
+
 // A normalized demand extracted from a candidate by the LLM.
 export interface DemandCard {
   id: string; // same as candidate id
@@ -34,4 +53,5 @@ export interface DemandCard {
   lang: "zh" | "en";
   postedAt: string; // candidate createdAt
   ingestedAt: string; // when we processed it
+  clusterId?: string | null; // set by the clustering stage, null until assigned
 }
