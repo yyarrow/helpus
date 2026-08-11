@@ -32,8 +32,24 @@ const ZH_PATTERNS: RegExp[] = [
   /(手动|人工).{0,6}(太|很|好)(累|慢|费时|费劲)/,
 ];
 
+const YT_PATTERNS_EN: RegExp[] = [
+  /\b(how (i|to)|my (workflow|system|setup|process))\b.*\b(spreadsheet|google sheets?|excel|notion|airtable|manually|multiple (apps|tools)|without (an? )?(app|code|coding))\b/i,
+  /\bautomat\w+\b.*\b(manual|tedious|spreadsheet)\b/i,
+];
+
+const YT_PATTERNS_ZH: RegExp[] = [
+  /(用|拿).{0,8}(表格|excel|notion).{0,10}(管理|整理|记录|追踪)/i,
+  /(手动|人工).{0,10}(整理|管理|流程|教程)/i,
+];
+
 export function isDemandSignal(c: Candidate): boolean {
   const haystack = `${c.title}\n${c.text}`;
+
+  if (c.source === "youtube") {
+    const patterns = c.lang === "zh" ? YT_PATTERNS_ZH : YT_PATTERNS_EN;
+    return patterns.some((p) => p.test(haystack));
+  }
+
   const patterns = c.lang === "zh" ? ZH_PATTERNS : EN_PATTERNS;
   return patterns.some((p) => p.test(haystack));
 }

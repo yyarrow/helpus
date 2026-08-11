@@ -1,6 +1,6 @@
 // Core data shapes shared by all pipeline stages.
 
-export type SourceId = "hn" | "reddit" | "v2ex" | "github";
+export type SourceId = "hn" | "reddit" | "v2ex" | "github" | "youtube";
 
 // A raw post/comment pulled from a source, before any filtering.
 export interface Candidate {

@@ -119,6 +119,7 @@ async function classifyBatch(batch: Candidate[], now: string): Promise<DemandCar
       "You are mining community posts for real product demands (unmet needs someone might build a product for).",
       "For EACH input post below, output exactly one result object with the same id.",
       "Mark isDemand=false for: memes, rants without a concrete need, self-promotion, job posts, news, questions already well-served by existing mainstream tools.",
+      "Workaround-tutorial posts (someone demonstrating how they accomplish a task by cobbling together spreadsheets or multiple apps) DO indicate a real unmet need: set isDemand=true and write `demand` as the underlying product need being worked around, not a description of the tutorial.",
       "Write `demand` as a crisp one-liner in the SAME language as the post (Chinese post -> Chinese demand).",
       "",
       "Respond with ONLY a JSON array (no prose, no markdown fences). One object per post:",
