@@ -55,14 +55,18 @@ async function searchVideos(query: string): Promise<any[]> {
     }
 
     const data = await response.json();
-    return (data.items || []).map((item: any) => ({
-      videoId: item.id.videoId,
-      title: item.snippet.title,
-      description: item.snippet.description,
-      channelTitle: item.snippet.channelTitle,
-      publishedAt: item.snippet.publishedAt,
-      queryLang: QUERIES_EN.includes(query) ? "en" : "zh",
-    }));
+    // Defensive defaults: the API occasionally omits snippet fields, and one
+    // malformed item must not take down the whole ingest run.
+    return (data.items || [])
+      .filter((item: any) => item?.id?.videoId)
+      .map((item: any) => ({
+        videoId: item.id.videoId,
+        title: item.snippet?.title ?? "",
+        description: item.snippet?.description ?? "",
+        channelTitle: item.snippet?.channelTitle ?? "",
+        publishedAt: item.snippet?.publishedAt ?? new Date().toISOString(),
+        queryLang: QUERIES_EN.includes(query) ? "en" : "zh",
+      }));
   } catch (error) {
     console.warn(`YouTube search error for "${query}": ${error}`);
     return [];
