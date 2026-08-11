@@ -20,6 +20,7 @@ export async function runIngest(): Promise<IngestStats> {
     import("@/lib/sources/reddit"),
     import("@/lib/sources/v2ex"),
     import("@/lib/sources/github"),
+    import("@/lib/sources/youtube"),
   ]);
 
   const results = await Promise.all(sources.map((s) => s.fetchCandidates()));

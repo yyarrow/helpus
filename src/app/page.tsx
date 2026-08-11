@@ -68,7 +68,7 @@ export default async function Home({
         <div className="max-w-3xl mx-auto px-4">
           <h1 className="text-3xl font-semibold mb-2">HelpUs · 需求雷达</h1>
           <p className="text-zinc-600 dark:text-zinc-400">
-            从 HN / Reddit / V2EX / GitHub 挖掘的真实需求
+            从 HN / Reddit / V2EX / GitHub / YouTube 挖掘的真实需求
           </p>
         </div>
       </header>
@@ -86,7 +86,7 @@ export default async function Home({
               isActive={!source}
               href={buildQueryString(undefined, lang, daysStr)}
             />
-            {["hn", "reddit", "v2ex", "github"].map((s) => (
+            {["hn", "reddit", "v2ex", "github", "youtube"].map((s) => (
               <FilterPill
                 key={s}
                 label={s.toUpperCase()}
