@@ -33,3 +33,7 @@ npm run dev   # 然后 curl http://localhost:3000/api/cron/ingest 触发一次�
 ## 部署
 
 Vercel（账号 yuanyanva-7250）。Cron 只在 production 部署生效。环境变量见 `.env.example`；`DATABASE_URL` 用 Neon（Vercel Marketplace）。
+
+## 方向(2026-08 起)
+
+产品定位从"技术圈需求雷达"进化为"付费需求雷达":现有四源全是开发者自留地(付费意愿最低人群),要向大众需求侧信号扩展。新信号源优先级、现有源已知偏差、卡片新字段(宿主依附度/人肉成交证据)见 `docs/signal-roadmap.md`——动信号源或筛选逻辑前先读它。
