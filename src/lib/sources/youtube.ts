@@ -1,17 +1,41 @@
 import type { Candidate } from "@/lib/types";
 
+// Each search.list call costs 100 quota units (10k/day default budget),
+// so keep the total around 20-25 queries.
 const QUERIES_EN = [
+  // cobbling with spreadsheets
   "how to automate with google sheets",
   "I use a spreadsheet to manage",
+  "google sheets as a database",
+  "how I run my business with spreadsheets",
+  "diy crm spreadsheet",
+  "excel inventory management template",
+  "content calendar spreadsheet",
+  "budget spreadsheet system",
+  // cobbling with note tools / multiple apps
   "my workflow using multiple apps",
+  "notion as a crm",
+  "using airtable instead of",
+  "how to sync data between apps",
+  // manual-process pain
   "how I track without an app",
   "manual process automation tutorial",
+  "automate repetitive tasks tutorial",
 ];
 
 const QUERIES_ZH = [
+  // 表格当系统用（经典拼凑信号）
   "用表格管理",
+  "excel 进销存",
+  "excel 客户管理 模板",
+  "表格 记账 模板",
+  "表格 排班",
+  "notion 模板 管理",
+  "飞书多维表格 管理",
+  // 手工流程痛点
   "手动整理 教程",
   "我的工作流 多个软件",
+  "自动化办公 教程",
 ];
 
 const QUERIES = [...QUERIES_EN, ...QUERIES_ZH];
