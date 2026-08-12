@@ -1,5 +1,6 @@
 import { filterCandidates } from "@/lib/filter";
 import { classifyCandidates } from "@/lib/classify";
+import { clusterNewDemands } from "@/lib/cluster";
 import { getSeenIds, saveDemands } from "@/lib/store";
 import type { Candidate } from "@/lib/types";
 
@@ -9,6 +10,7 @@ export interface IngestStats {
   newCandidates: number;
   classified: number;
   savedDemands: number;
+  clustered: number;
   bySource: Record<string, number>;
 }
 
@@ -18,6 +20,7 @@ export async function runIngest(): Promise<IngestStats> {
     import("@/lib/sources/reddit"),
     import("@/lib/sources/v2ex"),
     import("@/lib/sources/github"),
+    import("@/lib/sources/youtube"),
   ]);
 
   const results = await Promise.all(sources.map((s) => s.fetchCandidates()));
@@ -31,7 +34,10 @@ export async function runIngest(): Promise<IngestStats> {
   const fresh = matched.filter((c) => !seen.has(c.id));
 
   const cards = await classifyCandidates(fresh);
-  const saved = await saveDemands(cards);
+  await saveDemands(cards);
+  // Cluster whatever is pending (this run's cards plus any backlog from
+  // previously failed batches).
+  const clusterStats = await clusterNewDemands();
 
   return {
     fetched: all.length,
@@ -39,6 +45,7 @@ export async function runIngest(): Promise<IngestStats> {
     newCandidates: fresh.length,
     classified: cards.length,
     savedDemands: cards.filter((c) => c.isDemand).length,
+    clustered: clusterStats.assigned,
     bySource,
   };
 }

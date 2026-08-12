@@ -1,4 +1,4 @@
-import type { DemandCard } from "@/lib/types";
+import type { DemandCard, DemandCluster, ClusterStats } from "@/lib/types";
 
 // Storage: Neon Postgres when DATABASE_URL is set (production on Vercel),
 // otherwise a local JSON file under .data/ so the pipeline runs with zero setup in dev.
@@ -40,6 +40,16 @@ async function ensureSchema() {
       posted_at timestamptz,
       ingested_at timestamptz NOT NULL DEFAULT now()
     )`;
+  await sql`
+    CREATE TABLE IF NOT EXISTS clusters (
+      id text PRIMARY KEY,
+      title text NOT NULL,
+      summary text NOT NULL DEFAULT '',
+      category text NOT NULL DEFAULT '',
+      created_at timestamptz NOT NULL DEFAULT now(),
+      updated_at timestamptz NOT NULL DEFAULT now()
+    )`;
+  await sql`ALTER TABLE demands ADD COLUMN IF NOT EXISTS cluster_id text`;
   schemaReady = true;
 }
 
@@ -61,6 +71,7 @@ function rowToCard(r: Record<string, unknown>): DemandCard {
     lang: r.lang as DemandCard["lang"],
     postedAt: new Date(r.posted_at as string).toISOString(),
     ingestedAt: new Date(r.ingested_at as string).toISOString(),
+    clusterId: (r.cluster_id as string | null) ?? null,
   };
 }
 
@@ -123,6 +134,150 @@ export async function saveDemands(cards: DemandCard[]): Promise<number> {
   const fresh = cards.filter((c) => !seen.has(c.id));
   if (fresh.length > 0) await writeLocal([...existing, ...fresh]);
   return fresh.length;
+}
+
+// ---------- Clustering support ----------
+
+interface LocalClusterFile {
+  clusters: DemandCluster[];
+}
+
+const LOCAL_CLUSTER_FILE = ".data/clusters.json";
+
+async function readLocalClusters(): Promise<DemandCluster[]> {
+  const { readFile } = await import("node:fs/promises");
+  try {
+    const parsed = JSON.parse(await readFile(LOCAL_CLUSTER_FILE, "utf8")) as LocalClusterFile;
+    return parsed.clusters ?? [];
+  } catch {
+    return [];
+  }
+}
+
+async function writeLocalClusters(clusters: DemandCluster[]): Promise<void> {
+  const { mkdir, writeFile } = await import("node:fs/promises");
+  await mkdir(".data", { recursive: true });
+  await writeFile(LOCAL_CLUSTER_FILE, JSON.stringify({ clusters }, null, 2));
+}
+
+// Demand cards not yet assigned to a cluster, oldest first.
+export async function getUnclusteredDemands(limit: number): Promise<DemandCard[]> {
+  if (usePostgres()) {
+    await ensureSchema();
+    const sql = await pgClient();
+    const rows = await sql`
+      SELECT * FROM demands
+      WHERE is_demand = true AND cluster_id IS NULL
+      ORDER BY ingested_at ASC
+      LIMIT ${limit}`;
+    return rows.map(rowToCard);
+  }
+  return (await readLocal())
+    .filter((c) => c.isDemand && !c.clusterId)
+    .sort((a, b) => a.ingestedAt.localeCompare(b.ingestedAt))
+    .slice(0, limit);
+}
+
+// All clusters, compact form for the assignment prompt.
+export async function getClusters(): Promise<DemandCluster[]> {
+  if (usePostgres()) {
+    await ensureSchema();
+    const sql = await pgClient();
+    const rows = await sql`SELECT * FROM clusters ORDER BY created_at ASC`;
+    return rows.map((r) => ({
+      id: r.id as string,
+      title: r.title as string,
+      summary: r.summary as string,
+      category: r.category as string,
+      createdAt: new Date(r.created_at as string).toISOString(),
+      updatedAt: new Date(r.updated_at as string).toISOString(),
+    }));
+  }
+  return readLocalClusters();
+}
+
+export async function createCluster(cluster: DemandCluster): Promise<void> {
+  if (usePostgres()) {
+    await ensureSchema();
+    const sql = await pgClient();
+    await sql`
+      INSERT INTO clusters (id, title, summary, category, created_at, updated_at)
+      VALUES (${cluster.id}, ${cluster.title}, ${cluster.summary}, ${cluster.category},
+        ${cluster.createdAt}, ${cluster.updatedAt})
+      ON CONFLICT (id) DO NOTHING`;
+    return;
+  }
+  const clusters = await readLocalClusters();
+  if (!clusters.some((c) => c.id === cluster.id)) {
+    await writeLocalClusters([...clusters, cluster]);
+  }
+}
+
+export async function assignCardsToCluster(cardIds: string[], clusterId: string): Promise<void> {
+  if (cardIds.length === 0) return;
+  if (usePostgres()) {
+    await ensureSchema();
+    const sql = await pgClient();
+    await sql`UPDATE demands SET cluster_id = ${clusterId} WHERE id = ANY(${cardIds})`;
+    await sql`UPDATE clusters SET updated_at = now() WHERE id = ${clusterId}`;
+    return;
+  }
+  const cards = await readLocal();
+  const ids = new Set(cardIds);
+  await writeLocal(cards.map((c) => (ids.has(c.id) ? { ...c, clusterId } : c)));
+}
+
+// Clusters with read-time aggregates, ranked by validation strength:
+// distinct sources first, then card count, then recency.
+export async function getClusterStats(limit = 100): Promise<ClusterStats[]> {
+  if (usePostgres()) {
+    await ensureSchema();
+    const sql = await pgClient();
+    const rows = await sql`
+      SELECT c.*,
+        count(d.id)::int AS card_count,
+        count(DISTINCT d.source)::int AS source_count,
+        count(d.id) FILTER (WHERE d.pay_signal = 'strong')::int AS strong_pay_count,
+        max(d.ingested_at) AS last_seen_at
+      FROM clusters c
+      JOIN demands d ON d.cluster_id = c.id
+      GROUP BY c.id
+      ORDER BY count(DISTINCT d.source) DESC, count(d.id) DESC, max(d.ingested_at) DESC
+      LIMIT ${limit}`;
+    return rows.map((r) => ({
+      id: r.id as string,
+      title: r.title as string,
+      summary: r.summary as string,
+      category: r.category as string,
+      createdAt: new Date(r.created_at as string).toISOString(),
+      updatedAt: new Date(r.updated_at as string).toISOString(),
+      cardCount: r.card_count as number,
+      sourceCount: r.source_count as number,
+      strongPayCount: r.strong_pay_count as number,
+      lastSeenAt: new Date(r.last_seen_at as string).toISOString(),
+    }));
+  }
+  const [clusters, cards] = await Promise.all([readLocalClusters(), readLocal()]);
+  const stats = clusters
+    .map((c) => {
+      const members = cards.filter((d) => d.clusterId === c.id && d.isDemand);
+      return {
+        ...c,
+        cardCount: members.length,
+        sourceCount: new Set(members.map((m) => m.source)).size,
+        strongPayCount: members.filter((m) => m.paySignal === "strong").length,
+        lastSeenAt: members.reduce((max, m) => (m.ingestedAt > max ? m.ingestedAt : max), ""),
+      };
+    })
+    .filter((c) => c.cardCount > 0);
+  return stats
+    .sort(
+      (a, b) =>
+        b.sourceCount - a.sourceCount ||
+        b.cardCount - a.cardCount ||
+        b.lastSeenAt.localeCompare(a.lastSeenAt),
+    )
+    .slice(0, limit);
 }
 
 export interface DemandQuery {

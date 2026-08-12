@@ -32,8 +32,30 @@ const ZH_PATTERNS: RegExp[] = [
   /(手动|人工).{0,6}(太|很|好)(累|慢|费时|费劲)/,
 ];
 
+const YT_PATTERNS_EN: RegExp[] = [
+  /\b(how (i|to)|my (workflow|system|setup|process))\b.*\b(spreadsheet|google sheets?|excel|notion|airtable|manually|multiple (apps|tools)|without (an? )?(app|code|coding))\b/i,
+  /\bautomat\w+\b.*\b(manual|tedious|spreadsheet)\b/i,
+  // "X as a database/CRM/tracker" — tool used far outside its lane
+  /\b(google sheets?|spreadsheet|excel|notion|airtable)\b.*\b(as an? |instead of )?(database|crm|tracker|inventory|planner|system|template|setup)\b/i,
+  /\b(template|system|setup)\b.*\b(google sheets?|excel|notion|spreadsheet|airtable)\b/i,
+];
+
+const YT_PATTERNS_ZH: RegExp[] = [
+  /(用|拿).{0,8}(表格|excel|notion).{0,10}(管理|整理|记录|追踪)/i,
+  /(手动|人工).{0,10}(整理|管理|流程|教程)/i,
+  // 表格/笔记工具被当业务系统用
+  /(excel|表格|多维表格|notion|wps).{0,12}(模板|系统|进销存|记账|排班|库存|客户|管理)/i,
+  /(自动化|工作流).{0,8}(办公|教程|模板)/,
+];
+
 export function isDemandSignal(c: Candidate): boolean {
   const haystack = `${c.title}\n${c.text}`;
+
+  if (c.source === "youtube") {
+    const patterns = c.lang === "zh" ? YT_PATTERNS_ZH : YT_PATTERNS_EN;
+    return patterns.some((p) => p.test(haystack));
+  }
+
   const patterns = c.lang === "zh" ? ZH_PATTERNS : EN_PATTERNS;
   return patterns.some((p) => p.test(haystack));
 }
