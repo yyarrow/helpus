@@ -8,7 +8,7 @@ import type { Candidate, DemandCard } from "@/lib/types";
 // missing, falls back to pass-through cards so the pipeline still runs
 // end-to-end.
 
-const MODEL = process.env.DEMAND_MODEL ?? "google/gemini-3.5-flash";
+const MODEL = process.env.DEMAND_MODEL ?? "google/gemini-3.8-flash";
 const BATCH_SIZE = 12;
 
 const openrouter = createOpenAICompatible({
