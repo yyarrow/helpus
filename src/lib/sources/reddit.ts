@@ -28,11 +28,24 @@ interface RedditListing {
 
 async function fetchSubreddit(subreddit: string): Promise<Candidate[]> {
   try {
-    const url = `https://www.reddit.com/r/${subreddit}/new.json?limit=50&raw_json=1`;
+    const serviceUrl = process.env.REDDIT_AGENT_REACH_URL;
+    const token = process.env.REDDIT_AGENT_REACH_TOKEN;
+    if (serviceUrl && !token) {
+      console.warn("Reddit Agent-Reach token is missing");
+      return [];
+    }
+
+    // Vercel supplies a deployment-local URL through the service binding.
+    const url = serviceUrl
+      ? new URL("posts", serviceUrl.endsWith("/") ? serviceUrl : `${serviceUrl}/`)
+      : new URL(`https://www.reddit.com/r/${subreddit}/new.json?limit=50&raw_json=1`);
+    if (serviceUrl) url.searchParams.set("subreddit", subreddit);
     const response = await fetch(url, {
-      headers: {
-        "User-Agent": USER_AGENT,
-      },
+      headers: serviceUrl
+        ? { Authorization: `Bearer ${token}` }
+        : { "User-Agent": USER_AGENT },
+      cache: "no-store",
+      signal: AbortSignal.timeout(20_000),
     });
 
     if (!response.ok) {
@@ -70,7 +83,7 @@ async function fetchSubreddit(subreddit: string): Promise<Candidate[]> {
 
     return candidates;
   } catch (error) {
-    console.warn(`Error fetching r/${subreddit}:`, error);
+    console.warn(`Error fetching r/${subreddit}: ${error instanceof Error ? error.name : "unknown"}`);
     return [];
   }
 }

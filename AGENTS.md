@@ -26,7 +26,7 @@ npm run dev   # 然后 curl http://localhost:3000/api/cron/ingest 触发一次�
 ## 坑
 
 - **本地访问 HN/Reddit 等要走代理**：Node fetch 不认代理环境变量，必须加 `NODE_USE_ENV_PROXY=1 HTTP_PROXY=http://127.0.0.1:12334 HTTPS_PROXY=http://127.0.0.1:12334`。Vercel 上不需要。
-- **Reddit 公开 .json 端点对代理/机房 IP 返回 403**，目前 Reddit 源基本抓不到数据；要真用得上需要注册 Reddit OAuth app（client id/secret）改走官方 API。
+- **Reddit 公开 .json 端点对代理/机房 IP 返回 403**。配置 Agent-Reach 私有 Python service 后走其 `rdt-cli` 后端，凭据来自 Vercel 环境变量；未配置 service URL 时保留匿名路径。部署及验证见 `docs/reddit-agent-reach.md`，Cookie 不保证能绕过机房 IP 限制。
 - **ai 包是 v7**：`generateObject` 已移除，结构化输出用 `generateText` + `Output.array({ element })`，结果读 `result.output`。AI SDK 用法别凭记忆写，查 `node_modules/ai/docs/`。
 - LLM 分类需要 `OPENROUTER_API_KEY`（本地放 `.env.local`，生产放 Vercel env），没有就跳过分类。走 OpenRouter 时本地同样要过代理。
 
