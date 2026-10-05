@@ -19,7 +19,7 @@
 
 - **github 占 81%**,且多为宿主项目的 feature request:需求真实,但独立产品化空间被宿主吸走 → 建议卡片加「宿主依附度」字段(LLM 判断:该需求是否只有宿主项目适合做)。
 - **HN score 抓取过早**(普遍 1-6 分,热度未发酵)→ ingest 后 24-48h 回填一次 score。
-- **reddit 仍为 0**(公开 .json 端点 403,需注册 OAuth app 走官方 API)。
+- **reddit 仍为 0**(匿名 .json 对机房 IP 403;已支持 `REDDIT_COOKIES_JSON` 走登录 Cookie,见 AGENTS.md)。
 - **paySignal 不应是唯一入口**:weak 池里有 148 评论(剪贴板)和 137 评论(截图软件差评)的高热卡 → 看板加热度排序维度。
 - 新方法论下最有分量的新字段:「**人肉成交证据**」——该需求在 Fiverr/Upwork 是否存在对应 gig 及其成交量级。
 
