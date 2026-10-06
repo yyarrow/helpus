@@ -19,7 +19,7 @@
 
 - **github 占 81%**,且多为宿主项目的 feature request:需求真实,但独立产品化空间被宿主吸走 → 建议卡片加「宿主依附度」字段(LLM 判断:该需求是否只有宿主项目适合做)。
 - **HN score 抓取过早**(普遍 1-6 分,热度未发酵)→ ingest 后 24-48h 回填一次 score。
-- **reddit 仍为 0**(匿名 .json 对机房 IP 403;已支持 `REDDIT_COOKIES_JSON` 走登录 Cookie,见 AGENTS.md)。
+- **reddit**:2026-10-05 起走登录 Cookie(`REDDIT_COOKIES_JSON`,见 AGENTS.md)。版块从开发者自留地转向小生意/prosumer/消费者:去掉 r/SideProject(几乎全是"我做了个 X"展示帖),加 smallbusiness / Accounting / productivity / weddingplanning;AppIdeas、SomebodyMakeThis 每帖即需求,跳过正则直接进 LLM。实测一轮 340 帖 → 过滤后 29 条(原 72 → 5)。teachers / ADHD / nursing 量大但命中多为情绪宣泄,暂未加。
 - **paySignal 不应是唯一入口**:weak 池里有 148 评论(剪贴板)和 137 评论(截图软件差评)的高热卡 → 看板加热度排序维度。
 - 新方法论下最有分量的新字段:「**人肉成交证据**」——该需求在 Fiverr/Upwork 是否存在对应 gig 及其成交量级。
 
