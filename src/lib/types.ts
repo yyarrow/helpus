@@ -40,7 +40,7 @@ export interface DemandCard {
   id: string; // same as candidate id
   source: SourceId;
   url: string;
-  demand: string; // one-line statement of the need, in the candidate's language
+  demand: string; // one-line statement of the need, in Simplified Chinese
   audience: string; // who has this need
   scenario: string; // when/where the need arises
   category: string; // short free-form category, e.g. "开发工具" / "productivity"

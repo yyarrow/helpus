@@ -88,7 +88,7 @@ async function clusterBatch(
       "Do not create catch-all clusters such as \"AI developer tools\" or \"Productivity apps\". The test: could one product's landing page credibly promise to solve every card in the cluster?",
       "Cards in different languages CAN share a cluster when the problem is the same.",
       "For EACH card below, either assign an existing cluster id, or propose a new cluster. Prefer an existing cluster whenever it passes the test above; create a new one only when none does.",
-      "New cluster titles: short noun phrase (3-7 words) naming the problem space, general enough to absorb similar future cards. Do not name a specific product, repo or platform unless the need only exists there. Write title/summary in English unless the need is specific to the Chinese market, then use Chinese.",
+      "New cluster titles: short noun phrase (about 6-15 Chinese characters) naming the problem space, general enough to absorb similar future cards. Do not name a specific product, repo or platform unless the need only exists there. Write title/summary/category in Simplified Chinese; keep product names and technical terms like API or MCP as-is.",
       "",
       "Respond with ONLY a JSON array, one object per card:",
       '{"cardId": string, "clusterId": string | null, "newCluster": {"title": string, "summary": string, "category": string} | null}',
