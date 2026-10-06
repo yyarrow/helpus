@@ -14,9 +14,9 @@ import type { DemandCard, DemandCluster } from "@/lib/types";
 // Incremental LLM assignment — no embeddings needed at the current scale
 // (hundreds of cards); revisit with pgvector if cards grow past a few thousand.
 
-// deepseek-v4-flash timed out (>150s per 20-card batch) on OpenRouter in
-// 2026-10; gemini-3.8-flash with low reasoning effort takes ~12s.
-const MODEL = process.env.CLUSTER_MODEL ?? "google/gemini-3.8-flash";
+// deepseek-v4.1-flash at low reasoning effort: ~21s per 20-card batch, about
+// half gemini-3.8-flash's cost. (deepseek-v4-flash-0731 exceeded 150s.)
+const MODEL = process.env.CLUSTER_MODEL ?? "deepseek/deepseek-v4.1-flash";
 const BATCH_SIZE = 20;
 // Safety valve: one run never processes more than this many cards.
 const MAX_CARDS_PER_RUN = 300;

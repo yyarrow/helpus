@@ -8,7 +8,7 @@ import type { Candidate, DemandCard } from "@/lib/types";
 // missing, falls back to pass-through cards so the pipeline still runs
 // end-to-end.
 
-const MODEL = process.env.DEMAND_MODEL ?? "google/gemini-3.8-flash";
+const MODEL = process.env.DEMAND_MODEL ?? "deepseek/deepseek-v4.1-flash";
 const BATCH_SIZE = 12;
 
 const openrouter = createOpenAICompatible({
@@ -115,6 +115,8 @@ async function classifyBatch(batch: Candidate[], now: string): Promise<DemandCar
 
   const { text } = await generateText({
     model: openrouter(MODEL),
+    // Default effort is 3-4x slower; ingest must fit in 300s.
+    providerOptions: { openrouter: { reasoningEffort: "low" } },
     prompt: [
       "You are mining community posts for real product demands (unmet needs someone might build a product for).",
       "For EACH input post below, output exactly one result object with the same id.",

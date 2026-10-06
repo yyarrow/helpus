@@ -12,7 +12,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
 
 1. **抓取** `src/lib/sources/{hn,reddit,v2ex,github}.ts` — 每个源导出 `fetchCandidates(): Promise<Candidate[]>`，只用公开 API，失败降级为空数组。
 2. **过滤** `src/lib/filter.ts` — 中英文正则捞"痛点表达"，进 LLM 前干掉大部分噪音。
-3. **提炼** `src/lib/classify.ts` — OpenRouter + `google/gemini-3.8-flash`（`DEMAND_MODEL` 可覆盖），批量把候选变成 `DemandCard`；没有 `OPENROUTER_API_KEY` 时降级为 pass-through（category=unclassified）。
+3. **提炼** `src/lib/classify.ts` — OpenRouter + `deepseek/deepseek-v4.1-flash`（`DEMAND_MODEL` 可覆盖；聚类同款，`CLUSTER_MODEL` 可覆盖；两处都设 reasoning low，默认档慢 3-4 倍会撑爆 ingest 的 300s），批量把候选变成 `DemandCard`；没有 `OPENROUTER_API_KEY` 时降级为 pass-through（category=unclassified）。
 4. **存储** `src/lib/store.ts` — 有 `DATABASE_URL` 走 Neon Postgres（自动建表），否则写本地 `.data/demands.json`（已 gitignore）。
 
 入口：`/api/cron/ingest`（Vercel Cron 每 6 小时，见 vercel.json；设了 `CRON_SECRET` 就校验 Bearer）。看板：`/`（server component，URL 参数筛选 source/lang/days）。
