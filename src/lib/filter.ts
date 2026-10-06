@@ -48,8 +48,14 @@ const YT_PATTERNS_ZH: RegExp[] = [
   /(自动化|工作流).{0,8}(办公|教程|模板)/,
 ];
 
+// Every post in these subreddits is a product request, usually phrased as a
+// plain description ("An app that…") the patterns below would miss.
+const DEMAND_NATIVE_SUBREDDIT = /^https:\/\/www\.reddit\.com\/r\/(SomebodyMakeThis|AppIdeas)\//i;
+
 export function isDemandSignal(c: Candidate): boolean {
   const haystack = `${c.title}\n${c.text}`;
+
+  if (c.source === "reddit" && DEMAND_NATIVE_SUBREDDIT.test(c.url)) return true;
 
   if (c.source === "youtube") {
     const patterns = c.lang === "zh" ? YT_PATTERNS_ZH : YT_PATTERNS_EN;

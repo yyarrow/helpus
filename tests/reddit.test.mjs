@@ -4,7 +4,10 @@ import { fetchCandidates } from "../src/lib/sources/reddit.ts";
 
 const originalFetch = globalThis.fetch;
 const originalCookies = process.env.REDDIT_COOKIES_JSON;
-const SUBREDDITS = ["SomebodyMakeThis", "AppIdeas", "SideProject", "Entrepreneur"];
+const SUBREDDITS = [
+  "SomebodyMakeThis", "AppIdeas", "Entrepreneur", "smallbusiness",
+  "Accounting", "productivity", "weddingplanning",
+];
 
 const post = (overrides = {}) => ({
   kind: "t3",
@@ -36,7 +39,7 @@ test("without cookies, requests stay anonymous", async () => {
   assert.equal(candidates.length, 1);
   assert.equal(candidates[0].id, "reddit:demo");
   assert.deepEqual(calls.map(([url]) => url),
-    SUBREDDITS.map((sub) => `https://www.reddit.com/r/${sub}/new.json?limit=50&raw_json=1`));
+    SUBREDDITS.map((sub) => `https://www.reddit.com/r/${sub}/new.json?limit=100&raw_json=1`));
   for (const [, options] of calls) {
     assert.deepEqual(options.headers, { "User-Agent": "helpus-demand-miner/0.1" });
   }
@@ -80,7 +83,7 @@ test("invalid cookie config skips Reddit without any request", async () => {
 test("failed subreddits do not discard the others", async () => {
   globalThis.fetch = async (url) => {
     if (url.includes("/AppIdeas/")) return listing([post()]);
-    if (url.includes("/SideProject/")) throw new DOMException("Timed out", "TimeoutError");
+    if (url.includes("/smallbusiness/")) throw new DOMException("Timed out", "TimeoutError");
     return new Response(null, { status: 403 });
   };
   assert.equal((await fetchCandidates()).length, 1);

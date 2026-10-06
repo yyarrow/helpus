@@ -1,6 +1,17 @@
 import type { Candidate } from "@/lib/types";
 
-const SUBREDDITS = ["SomebodyMakeThis", "AppIdeas", "SideProject", "Entrepreneur"];
+// Demand-native subs (every post is a request) plus small-business / prosumer /
+// consumer subs where people ask how to get something done. Dev showcase subs
+// like r/SideProject were dropped: almost all "I built X" posts, no demand.
+const SUBREDDITS = [
+  "SomebodyMakeThis",
+  "AppIdeas",
+  "Entrepreneur",
+  "smallbusiness",
+  "Accounting",
+  "productivity",
+  "weddingplanning",
+];
 const USER_AGENT = "helpus-demand-miner/0.1";
 const CHROME_USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36";
 const HOURS_48 = 48 * 60 * 60 * 1000;
@@ -80,7 +91,7 @@ async function fetchSubreddit(
   headers: Record<string, string> | null
 ): Promise<Candidate[]> {
   try {
-    const url = `https://www.reddit.com/r/${subreddit}/new.json?limit=50&raw_json=1`;
+    const url = `https://www.reddit.com/r/${subreddit}/new.json?limit=100&raw_json=1`;
     const fetchHeaders = headers ?? { "User-Agent": USER_AGENT };
 
     const response = await fetch(url, {
