@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { getDemands, getClusterStats } from "@/lib/store";
 import type { DemandCard } from "@/lib/types";
 
@@ -85,7 +86,12 @@ export default async function Home({
       {/* Header */}
       <header className="border-b border-zinc-200 dark:border-zinc-800 py-8">
         <div className="max-w-3xl mx-auto px-4">
-          <h1 className="text-3xl font-semibold mb-2">HelpUs · 需求雷达</h1>
+          <div className="flex items-baseline justify-between mb-2">
+            <h1 className="text-3xl font-semibold">HelpUs · 需求雷达</h1>
+            <Link href="/admin" className="text-sm text-zinc-500 hover:underline">
+              后台
+            </Link>
+          </div>
           <p className="text-zinc-600 dark:text-zinc-400">
             从 HN / Reddit / V2EX / GitHub / YouTube 挖掘的真实需求
           </p>

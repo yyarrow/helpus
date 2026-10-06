@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { afterEach, beforeEach, test } from "node:test";
-import { fetchCandidates } from "../src/lib/sources/reddit.ts";
+import { fetchCandidates, sessionCookiesJson } from "../src/lib/sources/reddit.ts";
 
 const originalFetch = globalThis.fetch;
 const originalCookies = process.env.REDDIT_COOKIES_JSON;
@@ -23,6 +23,7 @@ const listing = (children) => Response.json({ data: { children } });
 
 beforeEach(() => {
   delete process.env.REDDIT_COOKIES_JSON;
+  delete process.env.DATABASE_URL;
 });
 afterEach(() => {
   globalThis.fetch = originalFetch;
@@ -88,4 +89,13 @@ test("failed subreddits do not discard the others", async () => {
     return new Response(null, { status: 403 });
   };
   assert.equal((await fetchCandidates()).length, 1);
+});
+
+test("pasted reddit_session values become a cookie map", () => {
+  const expected = JSON.stringify({ reddit_session: "abc.def" });
+  assert.equal(sessionCookiesJson("abc.def"), expected);
+  assert.equal(sessionCookiesJson("  reddit_session=abc.def; "), expected);
+  for (const bad of ["", "   ", "a b", "a;b", "reddit_session="]) {
+    assert.equal(sessionCookiesJson(bad), null, JSON.stringify(bad));
+  }
 });

@@ -49,9 +49,9 @@ interface RedditListing {
   };
 }
 
-function redditAuthHeaders(): Record<string, string> | null | "invalid" {
-  const cookiesJson = process.env.REDDIT_COOKIES_JSON;
-
+// Parses a cookie name -> value JSON map (must include reddit_session) into
+// browser-like request headers. null = no cookies configured (anonymous).
+export function cookieHeaders(cookiesJson: string | undefined | null): Record<string, string> | null | "invalid" {
   if (!cookiesJson || cookiesJson.trim() === "") {
     return null;
   }
@@ -97,10 +97,67 @@ function redditAuthHeaders(): Record<string, string> | null | "invalid" {
   };
 }
 
+// Turns what an admin pastes from DevTools — the bare value or
+// "reddit_session=<value>" — into the cookie JSON map. null if malformed.
+export function sessionCookiesJson(input: string): string | null {
+  const value = input.trim().replace(/^reddit_session=/, "").replace(/;$/, "").trim();
+  if (!value || /[\s;]/.test(value)) return null;
+  return JSON.stringify({ reddit_session: value });
+}
+
+export type CookieSource = "db" | "env" | "none";
+
+// The cookie set from /admin wins over the REDDIT_COOKIES_JSON env var.
+export async function currentCookies(): Promise<{ json: string | undefined; source: CookieSource }> {
+  if (process.env.DATABASE_URL) {
+    try {
+      const { getSetting, SETTINGS } = await import("@/lib/settings");
+      const setting = await getSetting(SETTINGS.redditCookies);
+      if (setting) return { json: setting.value, source: "db" };
+    } catch (error) {
+      console.warn(`Reading Reddit cookie setting failed: ${error instanceof Error ? error.message : "unknown"}`);
+    }
+  }
+  const env = process.env.REDDIT_COOKIES_JSON;
+  return env?.trim() ? { json: env, source: "env" } : { json: undefined, source: "none" };
+}
+
+// One cheap request to check whether Reddit accepts these cookies.
+// Returns the HTTP status, or 0 for a network error.
+export async function probeCookies(cookiesJson: string): Promise<number> {
+  const headers = cookieHeaders(cookiesJson);
+  if (!headers || headers === "invalid") return 0;
+  try {
+    const response = await fetch("https://www.reddit.com/r/smallbusiness/new.json?limit=1&raw_json=1", {
+      headers,
+      cache: "no-store",
+      signal: AbortSignal.timeout(15_000),
+    });
+    return response.status;
+  } catch {
+    return 0;
+  }
+}
+
+export interface RedditFetchReport {
+  at: string;
+  auth: CookieSource;
+  candidates: number;
+  okSubreddits: number;
+  totalSubreddits: number;
+  // subreddit -> HTTP status (0 = network error / bad response)
+  failed: Record<string, number>;
+}
+
+interface SubredditResult {
+  candidates: Candidate[];
+  status: number;
+}
+
 async function fetchSubreddit(
   subreddit: string,
   headers: Record<string, string> | null
-): Promise<Candidate[]> {
+): Promise<SubredditResult> {
   try {
     const url = `https://www.reddit.com/r/${subreddit}/new.json?limit=100&raw_json=1`;
     const fetchHeaders = headers ?? { "User-Agent": USER_AGENT };
@@ -113,7 +170,7 @@ async function fetchSubreddit(
 
     if (!response.ok) {
       console.warn(`Failed to fetch r/${subreddit}: ${response.status}`);
-      return [];
+      return { candidates: [], status: response.status };
     }
 
     const listing: RedditListing = await response.json();
@@ -144,18 +201,29 @@ async function fetchSubreddit(
       });
     }
 
-    return candidates;
+    return { candidates, status: response.status };
   } catch (error) {
     console.warn(`Error fetching r/${subreddit}:`, error);
-    return [];
+    return { candidates: [], status: 0 };
+  }
+}
+
+async function saveReport(report: RedditFetchReport) {
+  if (!process.env.DATABASE_URL) return;
+  try {
+    const { setSetting, SETTINGS } = await import("@/lib/settings");
+    await setSetting(SETTINGS.redditLastFetch, JSON.stringify(report));
+  } catch (error) {
+    console.warn(`Saving Reddit fetch report failed: ${error instanceof Error ? error.message : "unknown"}`);
   }
 }
 
 export async function fetchCandidates(): Promise<Candidate[]> {
-  const authHeaders = redditAuthHeaders();
+  const cookies = await currentCookies();
+  const authHeaders = cookieHeaders(cookies.json);
 
   if (authHeaders === "invalid") {
-    console.warn("REDDIT_COOKIES_JSON is invalid; skipping Reddit");
+    console.warn(`Reddit cookies from ${cookies.source} are invalid; skipping Reddit`);
     return [];
   }
 
@@ -163,7 +231,7 @@ export async function fetchCandidates(): Promise<Candidate[]> {
     SUBREDDITS.map((sub) => fetchSubreddit(sub, authHeaders))
   );
 
-  const allCandidates = results.flat();
+  const allCandidates = results.flatMap((r) => r.candidates);
 
   const seen = new Set<string>();
   const deduped: Candidate[] = [];
@@ -174,6 +242,19 @@ export async function fetchCandidates(): Promise<Candidate[]> {
       deduped.push(candidate);
     }
   }
+
+  const failed: Record<string, number> = {};
+  results.forEach((r, i) => {
+    if (r.status !== 200) failed[SUBREDDITS[i]] = r.status;
+  });
+  await saveReport({
+    at: new Date().toISOString(),
+    auth: cookies.source,
+    candidates: deduped.length,
+    okSubreddits: SUBREDDITS.length - Object.keys(failed).length,
+    totalSubreddits: SUBREDDITS.length,
+    failed,
+  });
 
   return deduped;
 }
