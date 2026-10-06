@@ -14,7 +14,11 @@ export interface IngestStats {
   bySource: Record<string, number>;
 }
 
+// The ingest route has maxDuration 300s; leave headroom to respond.
+const CLUSTER_DEADLINE_MS = 240_000;
+
 export async function runIngest(): Promise<IngestStats> {
+  const startedAt = Date.now();
   const sources = await Promise.all([
     import("@/lib/sources/hn"),
     import("@/lib/sources/reddit"),
@@ -37,7 +41,7 @@ export async function runIngest(): Promise<IngestStats> {
   await saveDemands(cards);
   // Cluster whatever is pending (this run's cards plus any backlog from
   // previously failed batches).
-  const clusterStats = await clusterNewDemands();
+  const clusterStats = await clusterNewDemands({ deadline: startedAt + CLUSTER_DEADLINE_MS });
 
   return {
     fetched: all.length,

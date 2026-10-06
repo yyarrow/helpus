@@ -14,10 +14,14 @@ import type { DemandCard, DemandCluster } from "@/lib/types";
 // Incremental LLM assignment — no embeddings needed at the current scale
 // (hundreds of cards); revisit with pgvector if cards grow past a few thousand.
 
-const MODEL = process.env.CLUSTER_MODEL ?? "deepseek/deepseek-v4-flash-0731";
+// deepseek-v4-flash timed out (>150s per 20-card batch) on OpenRouter in
+// 2026-10; gemini-3.8-flash with low reasoning effort takes ~12s.
+const MODEL = process.env.CLUSTER_MODEL ?? "google/gemini-3.8-flash";
 const BATCH_SIZE = 20;
 // Safety valve: one run never processes more than this many cards.
 const MAX_CARDS_PER_RUN = 300;
+// Don't start a batch with less time than this left before the deadline.
+const MIN_BATCH_MS = 30_000;
 
 const openrouter = createOpenAICompatible({
   name: "openrouter",
@@ -59,12 +63,13 @@ function newClusterId(): string {
   return `cl_${Math.random().toString(36).slice(2, 10)}`;
 }
 
-async function clusterBatch(batch: DemandCard[], clusters: DemandCluster[]): Promise<number> {
-  const clusterList = clusters.map((c) => ({
-    id: c.id,
-    title: c.title,
-    summary: c.summary,
-  }));
+async function clusterBatch(
+  batch: DemandCard[],
+  clusters: DemandCluster[],
+  timeoutMs: number,
+): Promise<number> {
+  // Titles only: the list is resent with every batch and grows over time.
+  const clusterList = clusters.map((c) => ({ id: c.id, title: c.title }));
   const cardList = batch.map((c) => ({
     id: c.id,
     demand: c.demand,
@@ -75,11 +80,15 @@ async function clusterBatch(batch: DemandCard[], clusters: DemandCluster[]): Pro
 
   const { text } = await generateText({
     model: openrouter(MODEL),
+    timeout: timeoutMs,
+    // Default effort spends ~90% of output on reasoning and triples latency.
+    providerOptions: { openrouter: { reasoningEffort: "low" } },
     prompt: [
-      "You are grouping product-demand cards into clusters. Two cards belong to the same cluster only if they express the SAME underlying need (same job to be done), not merely the same broad category.",
-      "Cards in different languages CAN share a cluster when the need is the same.",
-      "For EACH card below, either assign an existing cluster id, or propose a new cluster.",
-      "New cluster titles: short noun phrase naming the need. Write title/summary in English unless the need is specific to the Chinese market, then use Chinese.",
+      "You are grouping product-demand cards into clusters. A cluster is a PROBLEM SPACE that one product could plausibly serve. Group by the underlying problem and who has it, not by the specific host app, platform or feature wording: e.g. an AI coding agent and an AI business assistant that both forget context belong in one cluster, \"Persistent memory for AI agents\".",
+      "Do not create catch-all clusters such as \"AI developer tools\" or \"Productivity apps\". The test: could one product's landing page credibly promise to solve every card in the cluster?",
+      "Cards in different languages CAN share a cluster when the problem is the same.",
+      "For EACH card below, either assign an existing cluster id, or propose a new cluster. Prefer an existing cluster whenever it passes the test above; create a new one only when none does.",
+      "New cluster titles: short noun phrase (3-7 words) naming the problem space, general enough to absorb similar future cards. Do not name a specific product, repo or platform unless the need only exists there. Write title/summary in English unless the need is specific to the Chinese market, then use Chinese.",
       "",
       "Respond with ONLY a JSON array, one object per card:",
       '{"cardId": string, "clusterId": string | null, "newCluster": {"title": string, "summary": string, "category": string} | null}',
@@ -147,7 +156,14 @@ export interface ClusterStageStats {
   assigned: number;
 }
 
-export async function clusterNewDemands(): Promise<ClusterStageStats> {
+export interface ClusterOptions {
+  // Epoch ms. No batch starts with less than MIN_BATCH_MS left, and a running
+  // batch is aborted at the deadline; skipped cards are retried next run.
+  deadline?: number;
+}
+
+export async function clusterNewDemands(options: ClusterOptions = {}): Promise<ClusterStageStats> {
+  const deadline = options.deadline ?? Infinity;
   if (!process.env.OPENROUTER_API_KEY) {
     console.warn("cluster: OPENROUTER_API_KEY not set, skipping clustering");
     return { processed: 0, assigned: 0 };
@@ -159,9 +175,14 @@ export async function clusterNewDemands(): Promise<ClusterStageStats> {
   const clusters = await getClusters();
   let assigned = 0;
   for (let i = 0; i < pending.length; i += BATCH_SIZE) {
+    const remaining = deadline - Date.now();
+    if (remaining < MIN_BATCH_MS) {
+      console.warn(`cluster: time budget reached, ${pending.length - i} cards left for next run`);
+      break;
+    }
     const batch = pending.slice(i, i + BATCH_SIZE);
     try {
-      assigned += await clusterBatch(batch, clusters);
+      assigned += await clusterBatch(batch, clusters, Math.min(remaining, 120_000));
     } catch (err) {
       // Skip the failed batch; those cards stay unclustered and are retried
       // on the next run.
