@@ -48,14 +48,24 @@ const YT_PATTERNS_ZH: RegExp[] = [
   /(自动化|工作流).{0,8}(办公|教程|模板)/,
 ];
 
-// Every post in these subreddits is a product request, usually phrased as a
-// plain description ("An app that…") the patterns below would miss.
-const DEMAND_NATIVE_SUBREDDIT = /^https:\/\/www\.reddit\.com\/r\/(SomebodyMakeThis|AppIdeas)\//i;
+// Posts in these subreddits go straight to the LLM. AppIdeas/SomebodyMakeThis
+// are requests by definition; in the business-owner subs people ask "Any
+// suggestions?" or "What would you guys charge?", which the dev-flavoured
+// patterns below miss entirely (0 of 36 LLM-confirmed demands matched in the
+// 2026-10-06 probe). Their volume is low enough to classify every post.
+const LLM_GATED_SUBREDDIT = new RegExp(
+  `^https://www\\.reddit\\.com/r/(${[
+    "SomebodyMakeThis", "AppIdeas", "shopify", "printondemand", "ecommerce",
+    "FulfillmentByAmazon", "Flipping", "Contractor", "electricians",
+    "PropertyManagement", "msp", "WeddingPhotography",
+  ].join("|")})/`,
+  "i",
+);
 
 export function isDemandSignal(c: Candidate): boolean {
   const haystack = `${c.title}\n${c.text}`;
 
-  if (c.source === "reddit" && DEMAND_NATIVE_SUBREDDIT.test(c.url)) return true;
+  if (c.source === "reddit" && LLM_GATED_SUBREDDIT.test(c.url)) return true;
 
   if (c.source === "youtube") {
     const patterns = c.lang === "zh" ? YT_PATTERNS_ZH : YT_PATTERNS_EN;

@@ -7,9 +7,11 @@ const reddit = (sub, title) => ({
   url: `https://www.reddit.com/r/${sub}/comments/abc/x/`,
 });
 
-test("demand-native subreddits pass without a pattern match", () => {
+test("LLM-gated subreddits pass without a pattern match", () => {
   assert.ok(isDemandSignal(reddit("AppIdeas", "An app that lets you see what used to be there")));
   assert.ok(isDemandSignal(reddit("somebodymakethis", "A physical shutter for phones")));
+  assert.ok(isDemandSignal(reddit("shopify", "Bots swarming my store, what do I do?")));
+  assert.ok(!isDemandSignal(reddit("shopifydev", "Hit 10 paid users this month")));
 });
 
 test("other subreddits still need a demand pattern", () => {

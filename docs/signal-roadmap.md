@@ -19,7 +19,7 @@
 
 - **github 占 81%**,且多为宿主项目的 feature request:需求真实,但独立产品化空间被宿主吸走 → 建议卡片加「宿主依附度」字段(LLM 判断:该需求是否只有宿主项目适合做)。
 - **HN score 抓取过早**(普遍 1-6 分,热度未发酵)→ ingest 后 24-48h 回填一次 score。
-- **reddit**:2026-10-05 起走登录 Cookie(`REDDIT_COOKIES_JSON`,见 AGENTS.md)。版块从开发者自留地转向小生意/prosumer/消费者:去掉 r/SideProject(几乎全是"我做了个 X"展示帖),加 smallbusiness / Accounting / productivity / weddingplanning;AppIdeas、SomebodyMakeThis 每帖即需求,跳过正则直接进 LLM。实测一轮 340 帖 → 过滤后 29 条(原 72 → 5)。teachers / ADHD / nursing 量大但命中多为情绪宣泄,暂未加。
+- **reddit**:走登录 Cookie(`REDDIT_COOKIES_JSON`,见 AGENTS.md)。2026-10-06 实测:**店主/小生意社区是付费信号最强的人群,但正则过滤几乎全部误杀**——跳过正则、每版最近 20 帖直接进 LLM,shopify 8 需求(5 strong)、printondemand 7(5)、Flipping/Contractor/electricians/ecommerce 各 2 strong,而正则对这 36 条 LLM 确认的需求只命中 0 条(店主问法是 "Any suggestions?" / "What would you guys charge?",不是 "is there a tool")。因此这些版块 + AppIdeas/SomebodyMakeThis 全量进 LLM(filter.ts `LLM_GATED_SUBREDDIT`);smallbusiness / Accounting / weddingplanning 量大仍走正则。餐馆、美发、餐车、汽车美容、lawncare 实测无需求未加;SideProject(展示帖)、productivity(情绪帖)已去掉。单次快照样本小,一个月后按实际入库数据复核。
 - **paySignal 不应是唯一入口**:weak 池里有 148 评论(剪贴板)和 137 评论(截图软件差评)的高热卡 → 看板加热度排序维度。
 - 新方法论下最有分量的新字段:「**人肉成交证据**」——该需求在 Fiverr/Upwork 是否存在对应 gig 及其成交量级。
 
