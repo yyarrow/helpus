@@ -5,8 +5,9 @@ import { fetchCandidates } from "../src/lib/sources/reddit.ts";
 const originalFetch = globalThis.fetch;
 const originalCookies = process.env.REDDIT_COOKIES_JSON;
 const SUBREDDITS = [
-  "SomebodyMakeThis", "AppIdeas", "Entrepreneur", "smallbusiness",
-  "Accounting", "productivity", "weddingplanning",
+  "SomebodyMakeThis", "AppIdeas", "Entrepreneur", "smallbusiness", "Accounting",
+  "weddingplanning", "shopify", "printondemand", "ecommerce", "FulfillmentByAmazon",
+  "Flipping", "Contractor", "electricians", "PropertyManagement", "msp", "WeddingPhotography",
 ];
 
 const post = (overrides = {}) => ({

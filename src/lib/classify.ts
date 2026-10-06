@@ -10,6 +10,8 @@ import type { Candidate, DemandCard } from "@/lib/types";
 
 const MODEL = process.env.DEMAND_MODEL ?? "google/gemini-3.8-flash";
 const BATCH_SIZE = 12;
+// Batches run in parallel so ~200 posts/day fit in the ingest time budget.
+const CONCURRENCY = 4;
 
 const openrouter = createOpenAICompatible({
   name: "openrouter",
@@ -115,6 +117,8 @@ async function classifyBatch(batch: Candidate[], now: string): Promise<DemandCar
 
   const { text } = await generateText({
     model: openrouter(MODEL),
+    // Default effort is ~2x slower for no visible gain in this task.
+    providerOptions: { openrouter: { reasoningEffort: "low" } },
     prompt: [
       "You are mining community posts for real product demands (unmet needs someone might build a product for).",
       "For EACH input post below, output exactly one result object with the same id.",
@@ -165,22 +169,30 @@ export async function classifyCandidates(candidates: Candidate[]): Promise<Deman
     return candidates.map((c) => passthroughCard(c, now));
   }
 
-  const cards: DemandCard[] = [];
+  const batches: Candidate[][] = [];
   for (let i = 0; i < candidates.length; i += BATCH_SIZE) {
-    const batch = candidates.slice(i, i + BATCH_SIZE);
-    let done = false;
-    for (let attempt = 0; attempt < 2 && !done; attempt++) {
-      try {
-        cards.push(...(await classifyBatch(batch, now)));
-        done = true;
-      } catch (err) {
-        console.warn(`classify: batch ${i / BATCH_SIZE} attempt ${attempt + 1} failed`, err);
+    batches.push(candidates.slice(i, i + BATCH_SIZE));
+  }
+
+  const results: DemandCard[][] = new Array(batches.length);
+  let next = 0;
+  async function worker() {
+    while (next < batches.length) {
+      const index = next++;
+      const batch = batches[index];
+      for (let attempt = 0; attempt < 2 && !results[index]; attempt++) {
+        try {
+          results[index] = await classifyBatch(batch, now);
+        } catch (err) {
+          console.warn(`classify: batch ${index} attempt ${attempt + 1} failed`, err);
+        }
+      }
+      if (!results[index]) {
+        console.warn(`classify: batch ${index} exhausted retries, passing through`);
+        results[index] = batch.map((c) => passthroughCard(c, now));
       }
     }
-    if (!done) {
-      console.warn(`classify: batch ${i / BATCH_SIZE} exhausted retries, passing through`);
-      cards.push(...batch.map((c) => passthroughCard(c, now)));
-    }
   }
-  return cards;
+  await Promise.all(Array.from({ length: CONCURRENCY }, worker));
+  return results.flat();
 }

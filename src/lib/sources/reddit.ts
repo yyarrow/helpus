@@ -1,16 +1,27 @@
 import type { Candidate } from "@/lib/types";
 
-// Demand-native subs (every post is a request) plus small-business / prosumer /
-// consumer subs where people ask how to get something done. Dev showcase subs
-// like r/SideProject were dropped: almost all "I built X" posts, no demand.
+// Business owners are the audience most willing to pay. Subs were picked by a
+// 2026-10-06 probe (48h of posts each through the classifier); see
+// docs/signal-roadmap.md. Which of these skip the regex filter is decided in
+// filter.ts. Dropped: r/SideProject ("I built X" showcases), r/productivity
+// (venting), and restaurant / salon / food-truck subs (no demand found).
 const SUBREDDITS = [
   "SomebodyMakeThis",
   "AppIdeas",
   "Entrepreneur",
   "smallbusiness",
   "Accounting",
-  "productivity",
   "weddingplanning",
+  "shopify",
+  "printondemand",
+  "ecommerce",
+  "FulfillmentByAmazon",
+  "Flipping",
+  "Contractor",
+  "electricians",
+  "PropertyManagement",
+  "msp",
+  "WeddingPhotography",
 ];
 const USER_AGENT = "helpus-demand-miner/0.1";
 const CHROME_USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36";
